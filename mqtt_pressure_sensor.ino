@@ -2,13 +2,13 @@
  * ESP32 firmware to measure the pressure of the water system and send it to an MQTT 
  * broker.
  * Configuration is done via serial connection.  Enter:
- *  broker:<broker name or address>
- *  port:<port number>   (defaults to 1883)
- *  topic:<topic string> (something like buteomont/water/pressure/psi)
- *  user:<mqtt user>
- *  pass:<mqtt password>
- *  ssid:<wifi ssid>
- *  wifipass:<wifi password>
+ *  broker=<broker name or address>
+ *  port=<port number>   (defaults to 1883)
+ *  topic=<topic string> (something like buteomont/water/pressure/psi)
+ *  user=<mqtt user>
+ *  pass=<mqtt password>
+ *  ssid=<wifi ssid>
+ *  wifipass=<wifi password>
  *  
  */
  
@@ -26,18 +26,11 @@
 WiFiClient wifiClient;
 PubSubClient mqttClient(wifiClient);
 
-const char broker[] = "test.mosquitto.org";
-int        port     = 1883;
-const char topic[]  = "buteomont/water/pressure/psi";
-const char configureTopic[]  = "buteomont/water/pressure/configure/#"; //used to configure this device
-
-const long interval = 1000;
 unsigned long previousMillis = 0;
-
 int count = 0;
 
 int sensorPin = A0;     // the input pin for the sensor
-char sensorValue[7]=""; // place to store the value coming from the sensor in string form
+char sensorValue[10]=""; // place to store the value coming from the sensor in string form
 
 typedef struct 
   {
@@ -60,7 +53,7 @@ bool commandComplete = false;  // goes true when enter is pressed
 
 void setup() 
   {
-  //***************Initialize serial and wait for port to open:
+  //***************Initialize serial and wait for port to open 
   Serial.begin(115200);
   Serial.setTimeout(10000);
   Serial.println();
@@ -81,7 +74,7 @@ void setup()
 
   if (settingsAreValid)
     {
-    // ********************* attempt to connect to Wifi network:
+    // ********************* attempt to connect to Wifi network
     Serial.print("Attempting to connect to WPA SSID \"");
     Serial.print(settings.ssid);
     Serial.println("\"");
@@ -119,31 +112,31 @@ void setup()
 
 void showSettings()
   {
-  Serial.print("broker:<MQTT broker host name or address> (");
+  Serial.print("broker=<MQTT broker host name or address> (");
   Serial.print(settings.mqttBrokerAddress);
   Serial.println(")");
-  Serial.print("port:<port number>   (");
+  Serial.print("port=<port number>   (");
   Serial.print(settings.mqttBrokerPort);
   Serial.println(")");
-  Serial.print("topic:<topic string> (");
+  Serial.print("topic=<topic string> (");
   Serial.print(settings.mqttTopic);
   Serial.println(")");  
-  Serial.print("user:<mqtt user> (");
+  Serial.print("user=<mqtt user> (");
   Serial.print(settings.mqttUsername);
   Serial.println(")");
-  Serial.print("pass:<mqtt password> (");
+  Serial.print("pass=<mqtt password> (");
   Serial.print(settings.mqttPassword);
   Serial.println(")");
-  Serial.print("ssid:<wifi ssid> (");
+  Serial.print("ssid=<wifi ssid> (");
   Serial.print(settings.ssid);
   Serial.println(")");
-  Serial.print("wifipass:<wifi password> (");
+  Serial.print("wifipass=<wifi password> (");
   Serial.print(settings.wifiPassword);
   Serial.println(")");
-  Serial.print("interval:<post interval in seconds>   (");
+  Serial.print("interval=<post interval in seconds>   (");
   Serial.print(settings.mqttPostInterval/1000);
   Serial.println(")");
-  Serial.println("\n*** Use \"reset:yes\" to reset all settings ***\n");
+  Serial.println("\n*** Use \"reset=yes\" to reset all settings ***\n");
   }
 
 /*
@@ -181,8 +174,13 @@ void reconnect()
  */
 char* getPressure() 
   {
-  int value = analogRead(sensorPin); 
-  sprintf(sensorValue,"%d",value);
+  int value = analogRead(sensorPin); //819 per volt with resistor divider
+  int pressure= value-409; //get rid of the 0.5v offset
+  if (pressure<0)
+    pressure=0;
+  pressure=pressure/37; //36.855 per PSI
+  sprintf(sensorValue,"%d",pressure);
+//  sprintf(sensorValue,"%d",value);
   return sensorValue;
   }
 
@@ -196,7 +194,7 @@ String getConfigCommand()
     {
     Serial.println(commandString);
     String newCommand=commandString;
-    // clear the string:
+
     commandString = "";
     commandComplete = false;
     return newCommand;
@@ -208,9 +206,9 @@ void processCommand(String cmd)
   {
   const char *str=cmd.c_str();
   char *val=NULL;
-  char *nme=strtok((char *)str,":");
+  char *nme=strtok((char *)str,"=");
   if (nme!=NULL)
-    val=strtok(NULL,":");
+    val=strtok(NULL,"=");
 
   //Get rid of the carriage return
   if (val!=NULL && strlen(val)>0 && val[strlen(val)-1]==13)
@@ -396,18 +394,18 @@ boolean saveSettings()
 void serialEvent() {
   while (Serial.available()) 
     {
-    // get the new byte:
+    // get the new byte
     char inChar = (char)Serial.read();
 
     // if the incoming character is a newline, set a flag so the main loop can
-    // do something about it:
+    // do something about it 
     if (inChar == '\n') 
       {
       commandComplete = true;
       }
     else
       {
-      // add it to the inputString:
+      // add it to the inputString 
       commandString += inChar;
       }
     }
