@@ -4,6 +4,8 @@
 #define ADDRESS_SIZE 30
 #define USERNAME_SIZE 50
 #define MQTT_TOPIC_SIZE 150
+#define MQTT_TOPIC_RAW "raw"
+#define MQTT_TOPIC_PSI "psi"
 
 // Error codes copied from the MQTT library
 #define MQTT_CONNECTION_REFUSED            -2

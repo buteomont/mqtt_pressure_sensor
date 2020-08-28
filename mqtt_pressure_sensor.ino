@@ -4,11 +4,14 @@
  * Configuration is done via serial connection.  Enter:
  *  broker=<broker name or address>
  *  port=<port number>   (defaults to 1883)
- *  topic=<topic string> (something like buteomont/water/pressure/psi)
+ *  topic=<topic root> (something like buteomont/water/pressure/ - must end with / and "raw" or "psi" will be added)
  *  user=<mqtt user>
  *  pass=<mqtt password>
  *  ssid=<wifi ssid>
  *  wifipass=<wifi password>
+ *  interval=<post interval in seconds>
+ *  reboot=yes to reboot
+ *  factorydefaults=yes to reset all settings to factory defaults
  *  
  */
  
@@ -118,7 +121,7 @@ void showSettings()
   Serial.print("port=<port number>   (");
   Serial.print(settings.mqttBrokerPort);
   Serial.println(")");
-  Serial.print("topic=<topic string> (");
+  Serial.print("topic=<topic root> (");
   Serial.print(settings.mqttTopic);
   Serial.println(")");  
   Serial.print("user=<mqtt user> (");
@@ -136,7 +139,8 @@ void showSettings()
   Serial.print("interval=<post interval in seconds>   (");
   Serial.print(settings.mqttPostInterval/1000);
   Serial.println(")");
-  Serial.println("\n*** Use \"reset=yes\" to reset all settings ***\n");
+  Serial.println("\"reboot=yes\" to reboot the controller");
+  Serial.println("\n*** Use \"factorydefaults=yes\" to reset all settings ***\n");
   }
 
 /*
@@ -172,16 +176,19 @@ void reconnect()
 /*
  * Read and return the pressure value from the sensor
  */
-char* getPressure() 
+int getPressure() 
   {
-  int value = analogRead(sensorPin); //819 per volt with resistor divider
-  int pressure= value-409; //get rid of the 0.5v offset
+  return analogRead(sensorPin); //819 per volt with resistor divider
+  }
+
+char* convertValueToPressure(int value)
+  {
+  double pressure= value-256.0; //get rid of the 0.5v offset
   if (pressure<0)
     pressure=0;
-  pressure=pressure/37; //36.855 per PSI
-  sprintf(sensorValue,"%d",pressure);
-//  sprintf(sensorValue,"%d",value);
-  return sensorValue;
+  pressure=pressure/18.65; //determined empirically
+  sprintf(sensorValue,"%d",(int)pressure);
+  return sensorValue;  
   }
 
 /*
@@ -276,11 +283,18 @@ void processCommand(String cmd)
     if (settingsAreValid)
       ESP.restart();
     }
-  else if ((strcmp(nme,"reset")==0) && (strcmp(val,"yes")==0)) //reset all eeprom settings
+  else if ((strcmp(nme,"reboot")==0) && (strcmp(val,"yes")==0)) //reboot the controller
+    {
+    Serial.println("\n*********************** Rebooting! ************************");
+    delay(2000);
+    ESP.restart();
+    }
+  else if ((strcmp(nme,"factorydefaults")==0) && (strcmp(val,"yes")==0)) //reset all eeprom settings
     {
     Serial.println("\n*********************** Resetting EEPROM Values ************************");
     initializeSettings();
     saveSettings();
+    delay(2000);
     ESP.restart();
     }
   else
@@ -311,8 +325,6 @@ void loop()
   // avoids being disconnected by the broker
   mqttClient.loop();
 
-
-
   unsigned long currentMillis = millis();
   
   if (currentMillis - previousMillis >= settings.mqttPostInterval && mqttClient.connected()) 
@@ -321,13 +333,15 @@ void loop()
     previousMillis = currentMillis;
 
     //publish the current pressure
-    char* pressure=getPressure();
-    mqttClient.publish(settings.mqttTopic,pressure);
-    Serial.print(count++);
-    Serial.print("\t");
-    Serial.print(settings.mqttTopic);
-    Serial.print("\t");
-    Serial.println(pressure);
+    report();
+    }
+  else //something is amiss
+    {
+    if (currentMillis - previousMillis >= settings.mqttPostInterval)
+      {
+      Serial.println("Connected: "+mqttClient.connected());
+      reconnect();
+      }
     }
 
   String cmd=getConfigCommand();
@@ -337,6 +351,33 @@ void loop()
     }
   }
 
+void report()
+  {
+  int reading=getPressure();
+  char* pressure=convertValueToPressure(reading);
+  
+  char topic[MQTT_TOPIC_SIZE];
+
+  //publish the raw reading
+  strcpy(topic,settings.mqttTopic);
+  strcat(topic,MQTT_TOPIC_RAW);
+  char rawReading[5];
+  mqttClient.publish(topic,itoa(reading,rawReading,10));
+
+  //publish the converted PSI value
+  strcpy(topic,settings.mqttTopic);
+  strcat(topic,MQTT_TOPIC_PSI);
+  mqttClient.publish(topic,pressure);
+  
+  Serial.print(count++);
+  Serial.print("\t");
+  Serial.print(settings.mqttTopic);
+  Serial.print("\t");
+  Serial.print(pressure);
+  Serial.print(" (");
+  Serial.print(reading);
+  Serial.println(")");
+  }
 
 /*
 *  Initialize the settings from eeprom and determine if they are valid
