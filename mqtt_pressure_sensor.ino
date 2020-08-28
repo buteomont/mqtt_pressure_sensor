@@ -183,10 +183,10 @@ int getPressure()
 
 char* convertValueToPressure(int value)
   {
-  double pressure= value-256.0; //get rid of the 0.5v offset
+  double pressure= value-254.0; //get rid of the 0.5v offset
   if (pressure<0)
     pressure=0;
-  pressure=pressure/18.65; //determined empirically
+  pressure=pressure/18.5; //determined empirically
   sprintf(sensorValue,"%d",(int)pressure);
   return sensorValue;  
   }
